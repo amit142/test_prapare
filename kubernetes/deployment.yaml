@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: azure-vm-status-api
+  labels:
+    app: azure-vm-status-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: azure-vm-status-api
+  template:
+    metadata:
+      labels:
+        app: azure-vm-status-api
+    spec:
+      containers:
+      - name: azure-vm-status-api
+        image: yourdockerhub/azure-vm-status-api:latest
+        ports:
+        - containerPort: 5001
+        env:
+        - name: AZURE_SUBSCRIPTION_ID
+          valueFrom:
+            secretKeyRef:
+              name: azure-credentials
+              key: subscription-id
+        resources:
+          limits:
+            cpu: "0.5"
+            memory: "512Mi"
+          requests:
+            cpu: "0.2"
+            memory: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5001
+          initialDelaySeconds: 5
+          periodSeconds: 5 

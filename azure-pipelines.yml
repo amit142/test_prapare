@@ -1,0 +1,65 @@
+trigger:
+  - main
+  - dev
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  dockerRegistryServiceConnection: 'docker-hub-connection'
+  imageRepository: 'yourdockerhub/azure-vm-status-api'
+  dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
+  tag: '$(Build.BuildId)'
+
+stages:
+- stage: Build
+  displayName: Build and Test
+  jobs:
+  - job: BuildAndTest
+    displayName: Build and Test
+    steps:
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '3.9'
+        addToPath: true
+      displayName: 'Use Python 3.9'
+
+    - script: |
+        python -m pip install --upgrade pip
+        pip install flake8 bandit
+      displayName: 'Install tools'
+
+    - script: |
+        flake8 app.py --count --select=E9,F63,F7,F82 --show-source --statistics
+      displayName: 'Run Python linting'
+
+    - script: |
+        bandit -r app.py -f json -o $(Build.ArtifactStagingDirectory)/bandit-results.json
+      displayName: 'Run Python security scan'
+
+    - task: Docker@2
+      displayName: 'Build Docker image'
+      inputs:
+        command: build
+        repository: $(imageRepository)
+        dockerfile: $(dockerfilePath)
+        containerRegistry: $(dockerRegistryServiceConnection)
+        tags: |
+          $(tag)
+          latest
+
+    - task: Docker@2
+      displayName: 'Run Trivy security scan'
+      inputs:
+        command: 'run'
+        arguments: '--rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image $(imageRepository):$(tag)'
+
+    - task: Docker@2
+      displayName: 'Push Docker image'
+      inputs:
+        command: push
+        repository: $(imageRepository)
+        containerRegistry: $(dockerRegistryServiceConnection)
+        tags: |
+          $(tag)
+          latest 
